@@ -9,6 +9,7 @@ export default function ReportItem({ type }) {
   const [meta, setMeta] = useState({ categories: [], locations: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
   const [form, setForm] = useState({
     title: '',
     category: 'Electronics',
@@ -114,7 +115,80 @@ export default function ReportItem({ type }) {
           {type === 'lost'
             ? field('contactPreference', 'Contact preference', <input className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-2" value={form.contactPreference} onChange={(e) => set('contactPreference', e.target.value)} />)
             : field('storageInfo', 'Safe-storage information', <input className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-2" value={form.storageInfo} onChange={(e) => set('storageInfo', e.target.value)} />)}
-          {field('image', 'Photo', <input type="file" accept="image/*" className="mt-1 w-full text-sm" onChange={(e) => set('image', e.target.files?.[0] || null)} />)}
+          <div>
+  <label className="block text-sm font-medium">
+    Upload item photo
+  </label>
+
+  <p className="mt-1 text-sm text-muted">
+    Upload a clear photo to help identify and compare this item.
+    Maximum size: 5 MB.
+  </p>
+
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/webp"
+    className="mt-2 w-full text-sm"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+
+      if (!file) {
+        set('image', null);
+        setImagePreview('');
+        return;
+      }
+
+      const allowedTypes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ];
+
+      if (!allowedTypes.includes(file.type)) {
+        setError('Please upload a JPG, PNG, or WebP image.');
+        e.target.value = '';
+        set('image', null);
+        setImagePreview('');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be smaller than 5 MB.');
+        e.target.value = '';
+        set('image', null);
+        setImagePreview('');
+        return;
+      }
+
+      setError('');
+      set('image', file);
+      setImagePreview(URL.createObjectURL(file));
+    }}
+  />
+
+  {imagePreview && (
+    <div className="mt-4">
+      <img
+        src={imagePreview}
+        alt="Selected item preview"
+        className="h-48 w-full rounded-lg border border-line object-contain"
+      />
+
+      <button
+  type="button"
+  className="mt-2 text-sm text-danger"
+  onClick={() => {
+    set('image', null);
+    setImagePreview('');
+    const input = document.querySelector('input[type="file"]');
+    if (input) input.value = '';
+  }}
+>
+  Remove photo
+</button>
+    </div>
+  )}
+</div>
         </section>
 
         <section className="space-y-4 rounded-xl border border-line bg-card p-5">

@@ -19,7 +19,9 @@ export default function Admin() {
       setClaims(claimsRes.data.claims || []);
       setItems(itemsRes.data.items || []);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.response?.data?.message || error.message
+      );
     } finally {
       setLoading(false);
     }
@@ -36,6 +38,8 @@ export default function Admin() {
           ? 'Optional approval note:'
           : 'Reason for rejecting this claim:'
       );
+
+      if (notes === null) return;
 
       if (action === 'approve') {
         await api.put(`/admin/claims/${claimId}/approve`, {
@@ -55,7 +59,9 @@ export default function Admin() {
 
       await loadData();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.response?.data?.message || error.message
+      );
     }
   };
 
@@ -67,7 +73,9 @@ export default function Admin() {
 
       await loadData();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(
+        error.response?.data?.message || error.message
+      );
     }
   };
 
@@ -82,7 +90,9 @@ export default function Admin() {
   }
 
   const openClaims = claims.filter((claim) =>
-    ['pending', 'under_review', 'suspicious'].includes(claim.status)
+    ['pending', 'under_review', 'suspicious'].includes(
+      claim.status
+    )
   );
 
   return (
@@ -90,10 +100,12 @@ export default function Admin() {
       <section className="page-header">
         <div>
           <p className="eyebrow">Moderator tools</p>
+
           <h1>Admin Dashboard</h1>
+
           <p>
-            Review claims, investigate suspicious submissions, and manage
-            returned items.
+            Review claims, investigate suspicious submissions,
+            and manage returned items.
           </p>
         </div>
       </section>
@@ -104,6 +116,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* Claims requiring review */}
       <section className="page-card">
         <div className="section-heading">
           <div>
@@ -117,7 +130,10 @@ export default function Admin() {
         ) : (
           <div className="admin-list">
             {openClaims.map((claim) => (
-              <article className="admin-claim" key={claim._id}>
+              <article
+                className="admin-claim"
+                key={claim._id}
+              >
                 <div className="admin-claim-header">
                   <div>
                     <h3>
@@ -137,7 +153,10 @@ export default function Admin() {
                   </div>
 
                   <div className="claim-score">
-                    <strong>{claim.confidenceScore}%</strong>
+                    <strong>
+                      {claim.confidenceScore}%
+                    </strong>
+
                     <span>confidence</span>
                   </div>
                 </div>
@@ -150,6 +169,7 @@ export default function Admin() {
                 {claim.matchedFields?.length > 0 && (
                   <div>
                     <strong>Matched fields</strong>
+
                     <ul>
                       {claim.matchedFields.map((field) => (
                         <li key={field}>{field}</li>
@@ -161,6 +181,7 @@ export default function Admin() {
                 {claim.suspiciousFields?.length > 0 && (
                   <div>
                     <strong>Suspicious fields</strong>
+
                     <ul>
                       {claim.suspiciousFields.map((field) => (
                         <li key={field}>{field}</li>
@@ -170,40 +191,56 @@ export default function Admin() {
                 )}
 
                 <div className="verification-box">
-                  <strong>Claimant's verification answers</strong>
+                  <strong>
+                    Claimant's verification answers
+                  </strong>
 
                   <p>
                     <b>Unique marks:</b>{' '}
-                    {claim.answers?.uniqueMarks || 'Not provided'}
+                    {claim.answers?.uniqueMarks ||
+                      'Not provided'}
                   </p>
 
                   <p>
                     <b>Contents:</b>{' '}
-                    {claim.answers?.contents || 'Not provided'}
+                    {claim.answers?.contents ||
+                      'Not provided'}
                   </p>
 
                   <p>
                     <b>Hidden details:</b>{' '}
-                    {claim.answers?.hiddenDetails || 'Not provided'}
+                    {claim.answers?.hiddenDetails ||
+                      'Not provided'}
                   </p>
 
                   <p>
                     <b>Extra notes:</b>{' '}
-                    {claim.answers?.extraNotes || 'Not provided'}
+                    {claim.answers?.extraNotes ||
+                      'Not provided'}
                   </p>
                 </div>
 
                 <div className="admin-actions">
                   <button
                     className="button button-primary"
-                   onClick={() => reviewClaim(claim.id, 'approve')}
+                    onClick={() =>
+                      reviewClaim(
+                        claim._id || claim.id,
+                        'approve'
+                      )
+                    }
                   >
                     Approve claim
                   </button>
 
                   <button
                     className="button button-secondary"
-                   onClick={() => reviewClaim(claim.id, 'reject')}
+                    onClick={() =>
+                      reviewClaim(
+                        claim._id || claim.id,
+                        'reject'
+                      )
+                    }
                   >
                     Reject claim
                   </button>
@@ -214,11 +251,15 @@ export default function Admin() {
         )}
       </section>
 
+      {/* Reported items */}
       <section className="page-card">
         <div className="section-heading">
           <div>
             <h2>Reported items</h2>
-            <p>Manage found items and returned items.</p>
+
+            <p>
+              Manage found items and returned items.
+            </p>
           </div>
         </div>
 
@@ -227,33 +268,55 @@ export default function Admin() {
         ) : (
           <div className="admin-list">
             {items.map((item) => (
-              <article className="admin-item" key={item._id}>
-                <div>
-                  <h3>{item.title}</h3>
-
-                  <p>
-                    Type: {item.type}
-                  </p>
-
-                  <p>
-                    Status: <strong>{item.status}</strong>
-                  </p>
-
-                  {item.reporter && (
-                    <p>
-                      Reported by: {item.reporter.name}
-                    </p>
+              <article
+                className="admin-item"
+                key={item._id}
+              >
+                <div className="admin-item-details">
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.title || 'Reported item'}
+                      className="admin-item-image"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="admin-item-no-image">
+                      No photo available
+                    </div>
                   )}
+
+                  <div className="admin-item-info">
+                    <h3>{item.title}</h3>
+
+                    <p>
+                      Type: {item.type}
+                    </p>
+
+                    <p>
+                      Status: <strong>{item.status}</strong>
+                    </p>
+
+                    {item.reporter && (
+                      <p>
+                        Reported by:{' '}
+                        {item.reporter.name}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {item.type === 'found' && item.status !== 'returned' && (
-                  <button
-                    className="button button-primary"
-                    onClick={() => markReturned(item.id)}
-                  >
-                    Mark returned
-                  </button>
-                )}
+                {item.type === 'found' &&
+                  item.status !== 'returned' && (
+                    <button
+                      className="button button-primary"
+                      onClick={() =>
+                        markReturned(item._id || item.id)
+                      }
+                    >
+                      Mark returned
+                    </button>
+                  )}
               </article>
             ))}
           </div>

@@ -6,9 +6,13 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
 
+const allowedOrigins = env.clientOrigin
+  .split(',')
+  .map(origin => origin.trim());
+
 app.use(
   cors({
-    origin: env.clientOrigin,
+    origin: allowedOrigins,
     credentials: true,
   })
 );

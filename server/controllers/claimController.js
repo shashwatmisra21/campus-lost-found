@@ -11,41 +11,30 @@ function claimPayload(claim) {
   const obj = claim.toObject ? claim.toObject() : { ...claim };
   obj.id = obj._id;
 
-  const item =
-    obj.item && obj.item.privateVerificationData
-      ? toPublicItem(obj.item)
-      : obj.item;
+  const sanitizeItem = (source) => {
+    if (!source || typeof source !== 'object') {
+      return source;
+    }
 
-  // Remove the reporter's email from the general item response.
-  if (item && typeof item === 'object' && item.reporter) {
-    if (typeof item.reporter === 'object') {
+    const item = source.privateVerificationData
+      ? toPublicItem(source)
+      : { ...source };
+
+    if (item.reporter && typeof item.reporter === 'object') {
       item.reporter = {
         _id: item.reporter._id,
         name: item.reporter.name,
       };
     }
-  }
 
-  // Also prevent reporter-email exposure through a populated lost item.
-  const lostItem =
-    obj.lostItem && obj.lostItem.privateVerificationData
-      ? toPublicItem(obj.lostItem)
-      : obj.lostItem;
-
-  if (lostItem && typeof lostItem === 'object' && lostItem.reporter) {
-    if (typeof lostItem.reporter === 'object') {
-      lostItem.reporter = {
-        _id: lostItem.reporter._id,
-        name: lostItem.reporter.name,
-      };
-    }
-  }
+    return item;
+  };
 
   return {
     id: obj._id,
     claimant: obj.claimant,
-    item,
-    lostItem,
+    item: sanitizeItem(obj.item),
+    lostItem: sanitizeItem(obj.lostItem),
     answers: obj.answers,
     evidenceUrl: obj.evidenceUrl,
     confidenceScore: obj.confidenceScore,
@@ -148,20 +137,44 @@ const createClaim = asyncHandler(async (req, res) => {
   );
 });
 
-// Get the current user's claims.
-// Reporter contact details are included only for approved claims.
+// Get claims submitted by the user OR linked to their lost-item reports.
 const myClaims = asyncHandler(async (req, res) => {
+  const lostItems = await Item.find({
+    reporter: req.user._id,
+    type: 'lost',
+  }).select('_id');
+
+  const lostItemIds = lostItems.map((item) => item._id);
+
   const claims = await Claim.find({
-    claimant: req.user._id,
+    $or: [
+      { claimant: req.user._id },
+      { lostItem: { $in: lostItemIds } },
+    ],
   })
     .populate('item')
+    .populate('claimant', 'name')
+    .populate('lostItem')
     .sort({ createdAt: -1 });
 
   const result = await Promise.all(
     claims.map(async (claim) => {
       const payload = claimPayload(claim);
 
-      if (claim.status === 'approved' && claim.item) {
+      const isClaimant =
+        String(claim.claimant?._id || claim.claimant) ===
+        String(req.user._id);
+
+      const isLostItemReporter =
+        claim.lostItem &&
+        String(claim.lostItem.reporter) === String(req.user._id);
+
+      // Only approved claims can reveal contact information.
+      if (
+        claim.status === 'approved' &&
+        isClaimant &&
+        claim.item
+      ) {
         const itemId = claim.item._id || claim.item;
 
         const foundItem = await Item.findById(itemId)
@@ -173,6 +186,12 @@ const myClaims = asyncHandler(async (req, res) => {
             email: foundItem.reporter.email,
           };
         }
+      }
+
+      // A lost-item reporter can see the outcome of their linked claim,
+      // but does not automatically receive the found reporter's email here.
+      if (isLostItemReporter) {
+        payload.lostItemStatus = claim.lostItem.status;
       }
 
       return payload;
@@ -187,7 +206,8 @@ const myClaims = asyncHandler(async (req, res) => {
 const getClaim = asyncHandler(async (req, res) => {
   const claim = await Claim.findById(req.params.id)
     .populate('item')
-    .populate('claimant', 'name email');
+    .populate('claimant', 'name email')
+    .populate('lostItem');
 
   if (!claim) {
     return fail(res, 'Claim not found', 404);
@@ -200,13 +220,16 @@ const getClaim = asyncHandler(async (req, res) => {
 
   const isAdmin = req.user.role === 'admin';
 
-  if (!isOwner && !isAdmin) {
+  const isLostItemReporter =
+    claim.lostItem &&
+    String(claim.lostItem.reporter) === String(req.user._id);
+
+  if (!isOwner && !isAdmin && !isLostItemReporter) {
     return fail(res, 'Not allowed', 403);
   }
 
   const payload = claimPayload(claim);
 
-  // Only approved claims reveal the found-item reporter's contact details.
   if (claim.status === 'approved' && (isOwner || isAdmin)) {
     const itemId = claim.item?._id || claim.item;
 

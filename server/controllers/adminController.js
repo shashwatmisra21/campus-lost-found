@@ -51,10 +51,17 @@ const approveClaim = asyncHandler(async (req, res) => {
   await item.save();
 
   if (claim.lostItem) {
-    await Item.findByIdAndUpdate(claim.lostItem, { status: 'recovered', matchedItem: item._id });
-  } else {
-    await resolveLinkedLost(item, true);
+  const lostItem = await Item.findOne({
+    _id: claim.lostItem,
+    type: 'lost',
+  });
+
+  if (lostItem) {
+    lostItem.status = 'recovered';
+    lostItem.matchedItem = item._id;
+    await lostItem.save();
   }
+}
 
   await Claim.updateMany(
     { item: item._id, _id: { $ne: claim._id }, status: { $in: ['pending', 'under_review', 'suspicious'] } },

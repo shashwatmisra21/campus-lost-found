@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import ItemCard from '../components/ItemCard';
 import Spinner from '../components/Spinner';
@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const location = useLocation();
   const [mine, setMine] = useState([]);
   const [recent, setRecent] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -31,7 +32,7 @@ export default function Dashboard() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [location.key]);
 
   if (loading) return <Spinner />;
   if (error) return <p className="text-danger">{error}</p>;
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const lost = mine.filter((i) => i.type === 'lost');
   const found = mine.filter((i) => i.type === 'found');
   const pending = claims.filter((c) => ['pending', 'under_review', 'suspicious'].includes(c.status));
+  const approved = claims.filter((c) => c.status === 'approved');
 
   return (
     <div className="space-y-10">
@@ -120,6 +122,63 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+      <section>
+  <h2 className="mb-3 font-serif text-2xl">Approved claims</h2>
+
+  {approved.length === 0 ? (
+    <p className="text-sm text-muted">No approved claims yet.</p>
+  ) : (
+    <div className="space-y-3">
+      {approved.map((c) => (
+        <div
+          key={c.id}
+          className="rounded-xl border border-line bg-card p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-medium">{c.item?.title}</h3>
+            <StatusBadge status={c.status} />
+          </div>
+
+          <p className="mt-2 text-sm text-muted">
+            Your claim has been approved.
+          </p>
+
+          {c.reporterContact?.email ? (
+            <div className="mt-3 text-sm">
+              <p>
+                <span className="text-muted">Found reporter: </span>
+                {c.reporterContact.name}
+              </p>
+
+              <p className="mt-1">
+                <span className="text-muted">Email: </span>
+                <a
+                  href={`mailto:${c.reporterContact.email}`}
+                  className="text-accent underline"
+                >
+                  {c.reporterContact.email}
+                </a>
+              </p>
+
+              <a
+                href={`mailto:${c.reporterContact.email}?subject=${encodeURIComponent(
+                  `Regarding your found item: ${c.item?.title || 'Lost item'}`
+                )}`}
+                className="mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm text-white"
+              >
+                Contact reporter
+              </a>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted">
+              Contact information is not available.
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  )}
+</section>
 
       <div className="grid gap-8 lg:grid-cols-2">
         <section>

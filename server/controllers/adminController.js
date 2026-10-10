@@ -1,5 +1,6 @@
 const Claim = require('../models/Claim');
 const Item = require('../models/Item');
+const { sendClaimApprovedEmail } = require('../services/emailService');
 const { toPublicItem } = require('../models/Item');
 const { claimPayload } = require('./claimController');
 const asyncHandler = require('../utils/asyncHandler');
@@ -68,8 +69,38 @@ const approveClaim = asyncHandler(async (req, res) => {
     { status: 'rejected', adminNotes: 'Closed because another claim was approved.' }
   );
 
-  const populated = await Claim.findById(claim._id).populate('item').populate('claimant', 'name email');
-  return ok(res, { claim: claimPayload(populated) });
+  // Fetch the approved claim with the claimant's contact details.
+const populated = await Claim.findById(claim._id)
+  .populate('item')
+  .populate('claimant', 'name email');
+
+// Send the notification to the person who reported the lost item.
+if (claim.lostItem && populated?.claimant?.email) {
+  try {
+    const lostItem = await Item.findById(claim.lostItem);
+    const foundItem = await Item.findById(claim.item._id || claim.item)
+      .populate('reporter', 'name email');
+
+    if (lostItem && foundItem?.reporter?.email) {
+      await sendClaimApprovedEmail({
+        recipientEmail: populated.claimant.email,
+        recipientName: populated.claimant.name,
+        foundItemTitle: foundItem.title,
+        reporterName: foundItem.reporter.name,
+        reporterEmail: foundItem.reporter.email,
+      });
+
+      console.log('Claim approval email sent to:', populated.claimant.email);
+    } else {
+      console.warn('Claim approved, but reporter contact details were unavailable.');
+    }
+  } catch (emailError) {
+    // Keep the approval successful even if email delivery fails.
+    console.error('Failed to send claim approval email:', emailError.message);
+  }
+}
+
+return ok(res, { claim: claimPayload(populated) });
 });
 
 const rejectClaim = asyncHandler(async (req, res) => {
